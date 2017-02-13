@@ -4,6 +4,6 @@ Very much inspired by docker's completion script.
 
 ## Currently supported
 
-- `convox switch`
-- `convox apps info`
+- `convox switch <TAB>`
+- `convox apps info <TAB>`
 - `convox resources create <TAB>`
