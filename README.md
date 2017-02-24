@@ -2,6 +2,10 @@
 
 Very much inspired by docker's completion script.
 
+## Usage
+
+Source `convox` in your shell.
+
 ## Currently supported
 
 - `convox switch <TAB>`

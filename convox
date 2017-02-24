@@ -14,7 +14,7 @@
 #    below to your .bashrc after bash completion features are loaded
 #    . ~/.convox-completion.sh
 
-## original ##
+# TODO: login --password $ENVVAR
 
 : ${PROG:=$(basename ${BASH_SOURCE})}
 
@@ -32,6 +32,10 @@ complete -F _cli_bash_autocomplete $PROG
 #complete -F _cli_bash_autocomplete cx
 
 ## end original ##
+
+###############
+### HELPERS ###
+###############
 
 # Appends the word passed as an argument to every word in `$COMPREPLY`.
 # Normally you do this with `compgen -S`. This function exists so that you can use
@@ -132,252 +136,10 @@ __convox_to_extglob ()
     echo "@($extglob)"
 }
 
-# Subcommand processing.
-# Locates the first occurrence of any of the subcommands contained in the
-# first argument. In case of a match, calls the corresponding completion
-# function and returns 0.
-# If no match is found, 1 is returned. The calling function can then
-# continue processing its completion.
-#
-# TODO if the preceding command has options that accept arguments and an
-# argument is equal ot one of the subcommands, this is falsely detected as
-# a match.
-__convox_subcommands() {
-        local subcommands="$1"
-
-        local counter=$(($command_pos + 1))
-        while [ $counter -lt $cword ]; do
-                case "${words[$counter]}" in
-                        $(__convox_to_extglob "$subcommands") )
-                                subcommand_pos=$counter
-                                local subcommand=${words[$counter]}
-                                local completions_func=_convox_${command}_${subcommand}
-                                declare -F $completions_func >/dev/null && $completions_func
-                                return 0
-                                ;;   
-                esac 
-                (( counter++ ))
-        done 
-        return 1
-}
-
 # suppress trailing whitespace
 __convox_nospace() {
-        # compopt is not available in ancient bash versions
-        type compopt &>/dev/null && compopt -o nospace
-}
-
-__convox_complete_resource_types() {
-        COMPREPLY=( $( compgen -W "
-                fluentd
-                memcached
-                mysql
-                postgres
-                redis
-                s3
-                sns
-                sqs
-                syslog
-                webhook
-        " -- "$cur" ) )
-}
-
-_filedir() {
-    compgen -f
-}
-
-_convox_convox() {
-    # TODO
-            local boolean_options="
-                $global_boolean_options
-                --help -h
-                --version -v
-        "
-
-        case "$prev" in
-                --config)
-                        _filedir -d
-                        return
-                        ;;
-                --app|-a)
-                        __convox_complete_apps_all
-                        return
-                        ;;
-                --rack|-r)
-                        __convox_complete_racks_all
-                        return
-                        ;;
-                --log-level|-l)
-                        __convox_complete_log_levels
-                        return
-                        ;;
-                $(__convox_to_extglob "$global_options_with_args") )
-                        return
-                        ;;
-        esac
-        case "$cur" in
-                -*)
-                        COMPREPLY=( $( compgen -W "$boolean_options $global_options_with_args" -- "$cur" ) )
-                        ;;
-                *)
-                        local counter=$( __convox_pos_first_nonflag "$(__convox_to_extglob "$global_options_with_args")" )
-                        if [ $cword -eq $counter ]; then
-                                COMPREPLY=( $( compgen -W "${commands[*]} help" -- "$cur" ) )
-                        fi
-                        ;;
-        esac
-
-}
-
-_convox_build() {
-        local options_with_args="
-                --build-arg
-                --cgroup-parent
-                --cpuset-cpus
-                --cpuset-mems
-                --cpu-shares -c
-                --cpu-period
-                --cpu-quota
-                --file -f
-                --isolation
-                --label
-                --memory -m
-                --memory-swap
-                --shm-size
-                --tag -t
-                --ulimit
-        "
-
-        local boolean_options="
-                --disable-content-trust=false
-                --force-rm
-                --help
-                --no-cache
-                --pull
-                --quiet -q
-                --rm
-        "
-
-        local all_options="$options_with_args $boolean_options"
-
-        case "$prev" in
-                --build-arg)
-                        COMPREPLY=( $( compgen -e -- "$cur" ) )
-                        __convox_nospace
-                        return
-                        ;;
-                --file|-f)
-                        _filedir
-                        return
-                        ;;
-                --isolation)
-                        __convox_complete_isolation
-                        return
-                        ;;
-                --tag|-t)
-                        __convox_complete_image_repos_and_tags
-                        return
-                        ;;
-                $(__convox_to_extglob "$options_with_args") )
-                        return
-                        ;;
-        esac
-        case "$cur" in
-                -*)
-                        COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-                        ;;
-                *)
-                        local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
-                        if [ $cword -eq $counter ]; then
-                                _filedir -d
-                        fi
-                        ;;
-        esac
-
-}
-
-_convox_apps() {
-    local subcommands=$(convox apps --generate-bash-completion)
-    __convox_subcommands "$subcommands" && return
-    case "$cur" in
-            -*)
-                    COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
-                    ;;
-            *)
-                    COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
-                    ;;
-    esac
-}
-
-_convox_env() {
-    local subcommands=$(convox env --generate-bash-completion)
-    __convox_subcommands "$subcommands" && return
-    case "$cur" in
-            -*)
-                    COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
-                    ;;
-            *)
-                    COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
-                    ;;
-    esac
-}
-
-_convox_resources() {
-    local subcommands=$(convox resources --generate-bash-completion)
-    __convox_subcommands "$subcommands" && return
-    case "$cur" in
-            -*)
-                    COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
-                    ;;
-            *)
-                    COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
-                    ;;
-    esac
-
-}
-
-_convox_resources_create() {
-        local options_with_args="
-                --build-arg
-                --cgroup-parent
-        "
-
-        local boolean_options="
-                --help
-                --no-cache
-        "
-
-        local all_options="$options_with_args $boolean_options"
-        case "$prev" in
-                --build-arg)
-                        COMPREPLY=( $( compgen -e -- "$cur" ) )
-                        __convox_nospace
-                        return
-                        ;;
-                --file|-f)
-                        _filedir
-                        return
-                        ;;
-                --tag|-t)
-                        __convox_complete_image_repos_and_tags
-                        return
-                        ;;
-                $(__convox_to_extglob "$options_with_args") )
-                        return
-                        ;;
-        esac
-        case "$cur" in
-                -*)
-                        COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-                        ;;
-                *)
-                        local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
-                        if [ $cword -eq $counter ]; then
-                                __convox_complete_resource_types
-                        fi
-                        ;;
-        esac
-
+    # compopt is not available in ancient bash versions
+    type compopt &>/dev/null && compopt -o nospace
 }
 
 __convox_previous_extglob_setting=$(shopt -p extglob)
@@ -397,6 +159,11 @@ __convox_complete_apps_all() {
     COMPREPLY=( $(compgen -W "${apps[*]}" -- "$cur") )
 }
 
+__convox_complete_apps_by_rack() {
+    # TODO
+    __convox_complete_apps_all
+}
+
 __convox_complete_racks_all() {
     local IFS=$'\n'
     local racks=( $(__convox_q racks | grep -v RACK | awk '{ print $1 }') )
@@ -407,38 +174,188 @@ __convox_complete_racks_all() {
     COMPREPLY=( $(compgen -W "${racks[*]}" -- "$cur") )
 }
 
-_convox_apps_info() {
-    case "$cur" in
-        -*)
-            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
-            ;;
-        *)
-            __convox_complete_apps_all
-            ;;
-    esac
+_envvars() {
+    compgen -W "$(env)"
 }
 
-_convox_install() {
-    case "$cur" in
-        -*)
-            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
-            ;;
-        *)
-            _filedir
-            ;;
-    esac
+_filedir() {
+    COMPREPLY=( $( compgen $1 -- "$cur" ) )
 }
 
-_convox_switch(){
-    case "$cur" in
-        -*)
-            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
-            ;;
-        *)
-            __convox_complete_racks_all
-            ;;
-    esac
+###################
+### SUBCOMMANDS ###
+###################
+
+# Subcommand processing.
+# Locates the first occurrence of any of the subcommands contained in the
+# first argument. In case of a match, calls the corresponding completion
+# function and returns 0.
+# If no match is found, 1 is returned. The calling function can then
+# continue processing its completion.
+#
+# TODO if the preceding command has options that accept arguments and an
+# argument is equal ot one of the subcommands, this is falsely detected as
+# a match.
+# TODO this doesn't handle "sub-sub-commands" (e.g. convox resources create mysql)
+__convox_subcommands() {
+    local subcommands="$1"
+
+    local counter=$(($command_pos + 1))
+    while [ $counter -lt $cword ]; do
+        case "${words[$counter]}" in
+            $(__convox_to_extglob "$subcommands") )
+                subcommand_pos=$counter
+                local subcommand=${words[$counter]}
+
+                # This doesn't work :(
+                # if there's a sub-sub-command, run it
+                # local subsubcommand=${words[$counter-1]}
+                # local subcompletions_func=_convox_${command}_${subsubcommand}
+                # declare -F $subcompletions_func >/dev/null && $subcompletions_func && return 0
+
+                # otherwise proceed as usual
+                local completions_func=_convox_${command}_${subcommand}
+                declare -F $completions_func >/dev/null && $completions_func
+                return 0
+                ;;   
+        esac 
+        (( counter++ ))
+    done 
+    return 1
 }
+
+##################
+### WORD LISTS ###
+##################
+
+__convox_complete_get_api_endpoints() {
+    COMPREPLY=( $( compgen -W "
+        /apps
+        /auth
+        /certificates
+        /index
+        /instances
+        /racks
+        /registries
+        /resources
+        /system
+        /switch
+    " -- "$cur" ) )
+}
+
+__convox_complete_delete_api_endpoints() {
+    COMPREPLY=( $( compgen -W "
+        /apps
+        /auth
+        /certificates
+        /index
+        /instances
+        /racks
+        /registries
+        /resources
+        /switch
+        /system
+    " -- "$cur" ) )
+}
+
+__convox_complete_resource_types() {
+    COMPREPLY=( $( compgen -W "$(__convox_resource_types)" -- "$cur" ) )
+}
+
+__convox_resource_types() {
+    resource_types="
+        fluentd
+        memcached
+        mysql
+        postgres
+        redis
+        s3
+        sns
+        sqs
+        syslog
+        webhook
+    "
+    compgen -W "$resource_types"
+}
+
+# https://aws.amazon.com/ec2/instance-types/
+__convox_instance_types() {
+    instance_types="
+        t2.nano
+        t2.micro
+        t2.small
+        t2.medium
+        t2.large
+        t2.xlarge
+        t2.2xlarge
+        m4.large
+        m4.xlarge
+        m4.2xlarge
+        m4.4xlarge
+        m4.10xlarge
+        m4.16xlarge
+        m3.medium
+        m3.large
+        m3.xlarge
+        m3.2xlarge
+        c4.large
+        c4.xlarge
+        c4.2xlarge
+        c4.4xlarge
+        c4.8xlarge
+        c3.large
+        c3.xlarge
+        c3.2xlarge
+        c3.4xlarge
+        c3.8xlarge
+        x1.32.xlarge
+        x1.16.xlarge
+        r4.large
+        r4.xlarge
+        r4.2xlarge
+        r4.4xlarge
+        r4.8xlarge
+        r4.16xlarge
+        r3.large
+        r3.xlarge
+        r3.2xlarge
+        r3.4xlarge
+        r3.8xlarge
+        p2
+        g2
+        f1
+        i3
+        d2
+    "
+    compgen -W "$instance_types"
+}
+
+__convox_build_instance_types() {
+    instance_types="
+        m4.large
+    "
+    compgen -W "$instance_types"
+}
+
+__convox_regions() {
+    regions="
+        ap-northeast-1
+        ap-southeast-1
+        ap-southeast-2
+        eu-central-1
+        eu-west-1
+        eu-west-2
+        us-east-1
+        us-east-2
+        us-west-1
+        us-west-2
+    "
+    compgen -W "$regions"
+}
+
+################
+### COMMANDS ###
+################
 
 _convox() {
     local previous_extglob_setting=$(shopt -p extglob)
@@ -450,6 +367,7 @@ _convox() {
     local global_boolean_options="
             --version -v
             --help -h
+            --generate-bash-completion
     "
     local global_options_with_args="
             --rack
@@ -466,28 +384,28 @@ _convox() {
     local counter=1
     while [ $counter -lt $cword ]; do
         case "${words[$counter]}" in
-                # save app so that completion can use custom daemon
-                --app|-a)
-                        (( counter++ ))
-                        app="${words[$counter]}"
-                        ;;
-                --rack)
-                        (( counter++ ))
-                        rack="${words[$counter]}"
-                        ;;
-                $(__convox_to_extglob "$global_options_with_args") )
-                        (( counter++ ))
-                        ;;
-                -*)
-                        ;;
-                =)
-                        (( counter++ ))
-                        ;;
-                *)
-                        command="${words[$counter]}"
-                        command_pos=$counter
-                        break
-                        ;;
+            # save app so that completion can use custom daemon
+            --app|-a)
+                (( counter++ ))
+                app="${words[$counter]}"
+                ;;
+            --rack)
+                (( counter++ ))
+                rack="${words[$counter]}"
+                ;;
+            $(__convox_to_extglob "$global_options_with_args") )
+                (( counter++ ))
+                ;;
+            -*)
+                ;;
+            =)
+                (( counter++ ))
+                ;;
+            *)
+                command="${words[$counter]}"
+                command_pos=$counter
+                break
+                ;;
         esac
         (( counter++ ))
     done
@@ -499,6 +417,472 @@ _convox() {
     eval "$previous_extglob_setting"
     return 0
 }
+
+_convox_convox() {
+    local boolean_options="
+        $global_boolean_options
+        --help -h
+        --version -v
+    "
+
+    case "$prev" in
+        --config)
+            _filedir -d
+            return
+            ;;
+        --app|-a)
+            __convox_complete_apps_all
+            return
+            ;;
+        --rack|-r)
+            __convox_complete_racks_all
+            return
+            ;;
+        #--log-level|-l)
+            #__convox_complete_log_levels
+            #return
+            #;;
+        $(__convox_to_extglob "$global_options_with_args") )
+            return
+            ;;
+    esac
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$boolean_options $global_options_with_args" -- "$cur" ) )
+            ;;
+        *)
+            local counter=$( __convox_pos_first_nonflag "$(__convox_to_extglob "$global_options_with_args")" )
+            if [ $cword -eq $counter ]; then
+                COMPREPLY=( $( compgen -W "${commands[*]} help" -- "$cur" ) )
+            fi
+            ;;
+    esac
+}
+
+_convox_api() {
+    local subcommands=$(convox api --generate-bash-completion)
+    __convox_subcommands "$subcommands" && return
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            ;;
+    esac
+}
+
+_convox_api_get() {
+    local options_with_args="
+        --rack
+        --help -h
+    "
+    local boolean_options="
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            if [ $cword -eq $counter ]; then
+                __convox_complete_get_api_endpoints
+            fi
+            ;;
+    esac
+}
+
+_convox_api_delete() {
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            if [ $cword -eq $counter ]; then
+                __convox_complete_delete_api_endpoints
+            fi
+            ;;
+    esac
+}
+
+_convox_apps() {
+    local subcommands=$(convox apps --generate-bash-completion)
+    __convox_subcommands "$subcommands" && return
+    local options_with_args="
+        --rack
+        --help -h
+    "
+    local boolean_options="
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+    case "$cur" in
+        -*)
+            #COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            ;;
+    esac
+}
+
+_convox_apps_cancel() {
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "--help --app -a --rack" -- "$cur" ) )
+            ;;
+        --app|-a)
+            __convox_complete_apps_all
+            return
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$global_options_with_args" -- "$cur" ) )
+            return
+            ;;
+    esac
+}
+
+# TODO: convox apps delete
+
+_convox_apps_info() {
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            ;;
+        *)
+            __convox_complete_apps_all
+            ;;
+    esac
+}
+
+# TODO: convox apps params
+
+_convox_build() {
+    local options_with_args="
+        --file
+    "
+
+    local boolean_options="
+        --no-cache
+        --build-arg
+        --id
+        --incremental
+        --description
+        --help
+    "
+
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        # environment variable / envvar example
+        --build-arg)
+            COMPREPLY=( $( compgen -e -- "$cur" ) )
+            __convox_nospace
+            return
+            ;;
+        --file|-f)
+            _filedir
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            # FIXME: 'convox build' shouldn't take arguments
+            # local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            # if [ $cword -eq $counter ]; then
+                # _filedir -d
+            # fi
+            ;;
+    esac
+
+}
+
+_convox_env() {
+    local subcommands=$(convox env --generate-bash-completion)
+    __convox_subcommands "$subcommands" && return
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            ;;
+    esac
+}
+
+# TODO: versions
+_convox_install() {
+    local options_with_args="
+        --email
+        --ami
+        --build-instance
+        --existing-vpc
+        --instance-count
+        --instance-type
+        --internet-gateway
+        --private-cidrs
+        --region
+        --stack-name
+        --version
+        --vpc-cidr
+        --subnet-cidrs
+    "
+
+    local boolean_options="
+        --help
+        --dedicated
+        --no-autoscale
+        --private
+    "
+
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --name)
+            return
+            ;;
+        --region)
+            COMPREPLY=( $( __convox_regions -- "$cur" ) )
+            return
+            ;;
+        --build-instance)
+            COMPREPLY=( $( __convox_build_instance_types -- "$cur" ) )
+            ;;
+        --instance-type)
+            COMPREPLY=( $( __convox_instance_types -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            if [ $cword -eq $counter ]; then
+                _filedir -f
+                return
+            fi
+            ;;
+    esac
+}
+
+
+# TODO: convox instances
+_convox_instances() {
+    local subcommands=$(convox instances --generate-bash-completion)
+    __convox_subcommands "$subcommands" && return
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            ;;
+    esac
+}
+
+# _convox_rack
+# TODO: convox rack
+# TODO: convox rack logs
+# TODO: convox rack params
+# TODO: convox rack params set
+# TODO: convox rack ps
+# TODO: convox rack scale
+# TODO: convox rack update
+# TODO: convox rack releases
+
+# TODO: convox registries
+# TODO: convox registries add
+# TODO: convox registries remove
+
+# TODO: convox releases
+
+_convox_resources() {
+    local subcommands=$(convox resources --generate-bash-completion)
+    __convox_subcommands "$subcommands" && return
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            ;;
+    esac
+}
+
+_convox_resources_create() {
+    #local subcommands=$(__convox_complete_resource_types)
+    #local subcommands=$(__convox_complete_resource_types)
+    local subcommands="$(__convox_resource_types)"
+    echo "--"
+    echo $subcommands
+    echo "--"
+    x=$(__convox_subcommands "$subcommands")
+    echo $x
+    echo "--"
+
+    __convox_subcommands "$subcommands" && return
+
+    #local memcached_options="
+        #--instance-type
+        #--num-cache-nodes
+        #--private
+    #"
+
+    local options_with_args="
+        --name
+    "
+
+    local boolean_options="
+        --help
+    "
+
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --name)
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        mysql)
+            _convox_resources_create_mysql
+            return
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+
+            #local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            #if [ $cword -eq $counter ]; then
+                #__convox_complete_resource_types
+            #fi
+            ;;
+    esac
+}
+
+_convox_resources_mysql() {
+    _convox_resources_create_mysql
+}
+
+_convox_resources_create_mysql() {
+    local boolean_options="
+        --private
+        --multi-az
+    "
+    local options_with_args="
+        --allocated-storage
+        --database
+        --instance-type
+        --password
+        --username
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --allocated-storage)
+            COMPREPLY=( $( "10" -- "$cur" ) )
+            return
+            ;;
+        --database)
+            COMPREPLY=( $( "db-name" -- "$cur" ) )
+            return
+            ;;
+        --instance-type)
+            COMPREPLY=( $( __convox_instance_types -- "$cur" ) )
+            ;;
+        #$(__convox_to_extglob "$options_with_args") )
+            #return
+            #;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options --foo" -- "$cur" ) )
+            ;;
+        *)
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            if [ $cword -eq $counter ]; then
+                __convox_complete_resource_types # FIXME: don't need to complete resources types if mysql already specified
+            fi
+            ;;
+    esac
+
+}
+
+# TODO: convox run
+# TODO: convox scale
+# TODO: convox ssl
+
+
+_convox_switch(){
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            ;;
+        *)
+            __convox_complete_racks_all
+            ;;
+    esac
+}
+
 
 eval "$__convox_previous_extglob_setting"
 unset __convox_previous_extglob_setting
