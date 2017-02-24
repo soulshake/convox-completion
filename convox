@@ -278,6 +278,10 @@ __convox_resource_types() {
     compgen -W "$resource_types"
 }
 
+__convox_complete_instance_types() {
+    COMPREPLY=( $( compgen -W "$(__convox_instance_types)" -- "$cur" ) )
+}
+
 # https://aws.amazon.com/ec2/instance-types/
 __convox_instance_types() {
     instance_types="
@@ -333,6 +337,8 @@ __convox_instance_types() {
 __convox_build_instance_types() {
     instance_types="
         m4.large
+        m4.xlarge
+        c4.large
     "
     compgen -W "$instance_types"
 }
@@ -765,22 +771,8 @@ _convox_resources() {
 
 _convox_resources_create() {
     #local subcommands=$(__convox_complete_resource_types)
-    #local subcommands=$(__convox_complete_resource_types)
     local subcommands="$(__convox_resource_types)"
-    echo "--"
-    echo $subcommands
-    echo "--"
-    x=$(__convox_subcommands "$subcommands")
-    echo $x
-    echo "--"
-
     __convox_subcommands "$subcommands" && return
-
-    #local memcached_options="
-        #--instance-type
-        #--num-cache-nodes
-        #--private
-    #"
 
     local options_with_args="
         --name
@@ -805,6 +797,7 @@ _convox_resources_create() {
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         mysql)
+            #shift
             _convox_resources_create_mysql
             return
             ;;
@@ -837,20 +830,30 @@ _convox_resources_create_mysql() {
     "
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
-        --allocated-storage)
-            COMPREPLY=( $( "10" -- "$cur" ) )
-            return
-            ;;
-        --database)
-            COMPREPLY=( $( "db-name" -- "$cur" ) )
+        --allocated-storage|--database|--password|--username)
+            #COMPREPLY=( $( "10" -- "$cur" ) )
             return
             ;;
         --instance-type)
-            COMPREPLY=( $( __convox_instance_types -- "$cur" ) )
+            # FIXME: Tabbing after providing an instance types re-completes resource types
+            __convox_complete_instance_types
+            #__convox_complete_instance_types -- "$cur"
+            #COMPREPLY=( $( __convox_complete_instance_types -- "$cur" ) )
             ;;
-        #$(__convox_to_extglob "$options_with_args") )
-            #return
-            #;;
+        mysql)
+            # FIXME: we shouldn't need to handle this case
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            return
+            ;;
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "raaa" -- "$cur" ) )
+            ;;
     esac
 
     case "$cur" in
