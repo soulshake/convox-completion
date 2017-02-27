@@ -15,6 +15,9 @@
 #    . ~/.convox-completion.sh
 
 # TODO: login --password $ENVVAR
+# Note: The -f option to complete specifies filenames, and -X the filter pattern.
+# http://tldp.org/LDP/abs/html/tabexpansion.html
+# https://brbsix.github.io/2015/11/29/accessing-tab-completion-programmatically-in-bash/
 
 : ${PROG:=$(basename ${BASH_SOURCE})}
 
@@ -123,13 +126,6 @@ __convox_value_of_option() {
         done
 }
 
-__convox_to_alternatives () 
-{ 
-    local parts=($1);
-    local IFS='|';
-    echo "${parts[*]}"
-}
-
 # suppress trailing whitespace
 __convox_nospace() {
     # compopt is not available in ancient bash versions
@@ -168,6 +164,20 @@ __convox_complete_racks_all() {
     COMPREPLY=( $(compgen -W "${racks[*]}" -- "$cur") )
 }
 
+__convox_stacks() {
+    __convox_q racks | grep -v RACK | awk '{ print $1 }' | tr '/' " " | awk '{ print $2 }'
+}
+
+__convox_complete_stacks_all() {
+    local IFS=$'\n'
+    local stacks=( $(__convox_q racks | grep -v RACK | awk '{ print $1 }' | tr '/' " " | awk '{ print $2 }') )
+    if [ "$1" ]; then
+        stacks=( $(__convox_q racks | grep "^$1" | grep -v RACK | awk '{ print $1 }' | tr '/' " " | awk '{ print $2 }') )
+    fi
+    unset IFS
+    COMPREPLY=( $(compgen -W "${stacks[*]}" -- "$cur") )
+}
+
 __convox_complete_rack_params_no() {
     local IFS=$'\n'
     #local rack_params=( $(__convox_q rack_params | grep -v RACK | awk '{ print $1 }') )
@@ -185,6 +195,13 @@ _envvars() {
 
 _filedir() {
     COMPREPLY=( $( compgen $1 -- "$cur" ) )
+}
+
+__convox_to_alternatives () 
+{ 
+    local parts=($1);
+    local IFS='|';
+    echo "${parts[*]}"
 }
 
 __convox_to_extglob () 
@@ -368,6 +385,10 @@ __convox_regions() {
         us-west-2
     "
     compgen -W "$regions"
+}
+
+__convox_complete_regions() {
+    COMPREPLY=( $( compgen -W "$(__convox_regions)" -- "$cur" ) )
 }
 
 __convox_complete_rack_params() {
@@ -954,17 +975,11 @@ _convox_resources_create() {
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         mysql)
-            #shift
             _convox_resources_create_mysql
             return
             ;;
         *)
             COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
-
-            #local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
-            #if [ $cword -eq $counter ]; then
-                #__convox_complete_resource_types
-            #fi
             ;;
     esac
 }
@@ -1031,6 +1046,64 @@ _convox_resources_create_mysql() {
 # TODO: convox run
 # TODO: convox scale
 # TODO: convox ssl
+# TODO: convox start
+# TODO: convox switch
+# TODO: convox uninstall
+
+_convox_uninstall() {
+    local options_with_args="
+    "
+
+    local boolean_options="
+        --help
+        --force
+    "
+
+    local all_options="$options_with_args $boolean_options"
+    #echo "$(__convox_stacks)"
+    #echo $(__convox_stacks)
+    #return
+    case "$prev" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        # FIXME: complete regions
+        #$(__convox_to_extglob $(__convox_stacks)) )
+            #COMPREPLY=( $( __convox_regions -- "$cur" ) )
+            #COMPREPLY=( $( __convox_complete_regions -- "$cur" ) )
+            #;;
+        *)
+            __convox_complete_stacks_all
+            return
+            ;;
+    esac
+    #echo "---"
+    #echo "cur: $cur"
+    #echo "prev: $prev"
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+
+            #local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            #if [ $cword -eq $counter ]; then
+                #__convox_complete_resource_types
+            #fi
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            if [ $cword -eq $counter ]; then
+                __convox_complete_regions
+                return
+            else
+                echo "$counter"
+            fi
+            ;;
+    esac
+}
+
+# TODO: convox update
+
 
 
 _convox_switch(){
