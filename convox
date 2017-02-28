@@ -141,6 +141,10 @@ __convox_q(){
     convox 2>/dev/null "$@"
 }
 
+###########################
+### DYNAMIC COMPLETIONS ###
+###########################
+
 __convox_complete_apps_all() {
     local IFS=$'\n'
     local apps=( $(__convox_q apps | grep -v APP | awk '{ print $1 }') )
@@ -175,16 +179,9 @@ __convox_complete_rack_versions() {
 
 __convox_complete_racks_all() {
     local IFS=$'\n'
-    local racks=( $(__convox_q racks | grep -v RACK | awk '{ print $1 }') )
-    if [ "$1" ]; then
-        racks=( $(__convox_q racks | grep "^$1" | grep -v RACK | awk '{ print $1 }') )
-    fi
+    local racks=( $(__convox_racks $1) )
     unset IFS
     COMPREPLY=( $(compgen -W "${racks[*]}" -- "$cur") )
-}
-
-__convox_stacks() {
-    __convox_q racks | grep -v RACK | awk '{ print $1 }' | tr '/' " " | awk '{ print $2 }'
 }
 
 __convox_complete_stacks_all() {
@@ -197,15 +194,37 @@ __convox_complete_stacks_all() {
     COMPREPLY=( $(compgen -W "${stacks[*]}" -- "$cur") )
 }
 
-__convox_complete_rack_params_no() {
-    local IFS=$'\n'
-    #local rack_params=( $(__convox_q rack_params | grep -v RACK | awk '{ print $1 }') )
-    local rack_params=( $(__convox_rack_params) )
-    if [ "$1" ]; then
-        rack_params=( $(__convox_q rack_params | grep "^$1" | grep -v RACK | awk '{ print $1 }') )
-    fi
-    unset IFS
-    COMPREPLY=( $(compgen -W "${rack_params[*]}" -- "$cur") )
+__convox_complete_yes_or_no() {
+    COMPREPLY=( $( __convox_yes_or_no -- "$cur" ) )
+}
+
+__convox_complete_get_api_endpoints() {
+    COMPREPLY=( $( compgen -W "$(__convox_api_endpoints)" -- "$cur" ) )
+}
+
+__convox_complete_delete_api_endpoints() {
+    COMPREPLY=( $( compgen -W "$(__convox_api_endpoints)" -- "$cur" ) )
+}
+
+__convox_complete_resource_types() {
+    COMPREPLY=( $( compgen -W "$(__convox_resource_types)" -- "$cur" ) )
+}
+
+__convox_complete_instance_types() {
+    COMPREPLY=( $( compgen -W "$(__convox_instance_types)" -- "$cur" ) )
+}
+
+__convox_complete_regions() {
+    COMPREPLY=( $( compgen -W "$(__convox_regions)" -- "$cur" ) )
+}
+
+__convox_complete_app_params() {
+    #COMPREPLY=( $( compgen -S "=" -W "$(__convox_app_params)" -- "$cur" ) )
+    COMPREPLY=( $( "$(__convox_app_params)" -- "$cur" ) )
+}
+
+__convox_complete_rack_params() {
+    COMPREPLY=( $( "$(__convox_rack_params)" -- "$cur" ) )
 }
 
 __convox_complete_env_vars() {
@@ -276,6 +295,23 @@ __convox_subcommands() {
         (( counter++ ))
     done 
     return 1
+}
+
+##########################
+### DYNAMIC WORD LISTS ###
+##########################
+
+__convox_stacks() {
+    __convox_q racks | grep -v RACK | awk '{ print $1 }' | tr '/' " " | awk '{ print $2 }'
+}
+
+__convox_racks() {
+    if [ "$1" ]; then
+        __convox_q racks | grep -v RACK | grep ^$1 | awk '{ print $1 }'
+    else
+        __convox_q racks | grep -v RACK | awk '{ print $1 }'
+    fi
+    #local racks=( $(__convox_q racks | grep -v RACK | awk '{ print $1 }') )
 }
 
 ##################
@@ -441,7 +477,6 @@ __convox_rack_params() {
         Version
         VolumeSize
     "
-    # TODO: nospace => shouldn't add a space to the end
     compgen -S "=" -o nospace -W "$rack_params"
 }
 
@@ -461,33 +496,12 @@ __convox_regions() {
     compgen -W "$regions"
 }
 
-__convox_complete_get_api_endpoints() {
-    COMPREPLY=( $( __convox_api_endpoints -- "$cur" ) )
-}
-
-__convox_complete_delete_api_endpoints() {
-    COMPREPLY=( $( __convox_api_endpoints -- "$cur" ) )
-}
-
-__convox_complete_resource_types() {
-    COMPREPLY=( $( compgen -W "$(__convox_resource_types)" -- "$cur" ) )
-}
-
-__convox_complete_instance_types() {
-    COMPREPLY=( $( compgen -W "$(__convox_instance_types)" -- "$cur" ) )
-}
-
-__convox_complete_regions() {
-    COMPREPLY=( $( compgen -W "$(__convox_regions)" -- "$cur" ) )
-}
-
-__convox_complete_app_params() {
-    #COMPREPLY=( $( compgen -S "=" -W "$(__convox_app_params)" -- "$cur" ) )
-    COMPREPLY=( $( "$(__convox_app_params)" -- "$cur" ) )
-}
-
-__convox_complete_rack_params() {
-    COMPREPLY=( $( "$(__convox_rack_params)" -- "$cur" ) )
+__convox_yes_or_no() {
+    yes_or_no="
+        Yes
+        No
+    "
+    compgen -W "$yes_or_no"
 }
 
 ################
@@ -909,14 +923,17 @@ _convox_install() {
             return
             ;;
         --region)
-            COMPREPLY=( $( __convox_regions -- "$cur" ) )
+            __convox_complete_regions
+            #COMPREPLY=( $( __convox_regions -- "$cur" ) )
             return
             ;;
         --build-instance)
+            # TODO
             COMPREPLY=( $( __convox_build_instance_types -- "$cur" ) )
             ;;
         --instance-type)
-            COMPREPLY=( $( __convox_instance_types -- "$cur" ) )
+            __convox_complete_instance_types
+            return
             ;;
         $(__convox_to_extglob "$options_with_args") )
             return
@@ -1040,6 +1057,7 @@ _convox_rack_set() {
     # FIXME: this is needed because of how __convox_subcommands infers the function name
     _convox_rack_params_set
 }
+
 _convox_rack_params_set() {
     local subcommands="$(__convox_rack_params)"
     __convox_subcommands "$subcommands" && return
@@ -1054,6 +1072,14 @@ _convox_rack_params_set() {
 
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
+        Private|Internal)
+            __convox_complete_yes_or_no
+            return
+            ;;
+        #InstanceType*)
+            #__convox_complete_instance_types
+            #return
+            #;;
         --rack|-r)
             __convox_complete_racks_all
             return
@@ -1067,6 +1093,10 @@ _convox_rack_params_set() {
     esac
 
     case "$cur" in
+        #InstanceType*)
+            #__convox_complete_instance_types
+            #return
+            #;;
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
@@ -1296,7 +1326,6 @@ _convox_resources() {
 }
 
 _convox_resources_create() {
-    #local subcommands=$(__convox_complete_resource_types)
     local subcommands="$(__convox_resource_types)"
     __convox_subcommands "$subcommands" && return
 
@@ -1358,8 +1387,6 @@ _convox_resources_create_mysql() {
         --instance-type)
             # FIXME: Tabbing after providing an instance types re-completes resource types
             __convox_complete_instance_types
-            #__convox_complete_instance_types -- "$cur"
-            #COMPREPLY=( $( __convox_complete_instance_types -- "$cur" ) )
             ;;
         mysql)
             # FIXME: we shouldn't need to handle this case
