@@ -34,10 +34,6 @@ _cli_bash_autocomplete() {
 
 complete -F _cli_bash_autocomplete $PROG
 
-#complete -F _cli_bash_autocomplete cx
-
-## end original ##
-
 ###############
 ### HELPERS ###
 ###############
@@ -52,21 +48,16 @@ __convox_append_to_completions() {
 stderr_echo() {
     >&2 echo "$@"
 }
+
 # Finds the position of the first word that is neither option nor an option's argument.
 # If there are options that require arguments, you should pass a glob describing those
 # options, e.g. "--option1|-o|--option2"
 # Use this function to restrict completions to exact positions after the argument list.
 __convox_pos_first_nonflag() {
         local argument_flags=$1
-        #>&2 echo
-        #>&2 echo "argument flags: $argument_flags"
 
-        #local counter=$((${subcommand_pos:-${command_pos}} + 1))
-        local counter=$((${subcommand_pos:-${command_pos}} ))
+        local counter=$((${subcommand_pos:-${command_pos}} + 1))
         while [ $counter -le $cword ]; do
-                #>&2 echo "words: $words"
-                #>&2 echo "cword: $cword"
-                #>&2 echo "counter: $counter"
                 if [ -n "$argument_flags" ] && eval "case '${words[$counter]}' in $argument_flags) true ;; *) false ;; esac"; then
                         (( counter++ ))
                         # eat "=" in case of --option=arg syntax
@@ -84,14 +75,12 @@ __convox_pos_first_nonflag() {
                 # Bash splits words at "=", retaining "=" as a word, examples:
                 # "--debug=false" => 3 words, "--log-opt syslog-facility=daemon" => 4 words
                 while [ "${words[$counter + 1]}" = "=" ] ; do
-                    #>&2 echo "${words[$counter]} mraaa"
                     counter=$(( counter + 2))
                 done
 
                 (( counter++ ))
         done
 
-        #stderr_echo "counter: $counter (${words[$counter]})"
         echo $counter
 }
 
@@ -284,23 +273,35 @@ __convox_to_extglob ()
 # TODO this doesn't handle "sub-sub-commands" (e.g. convox resources create mysql)
 __convox_subcommands() {
     local subcommands="$1"
+    #local subcommands="$@"
+    #stderr_echo "subcommands: $subcommands"
 
     local counter=$(($command_pos + 1))
     while [ $counter -lt $cword ]; do
+        parent="${words[$counter - 1]}"
+        #stderr_echo
+        #stderr_echo "parent: $parent"
+        #stderr_echo "command: $command"
+        #if [ ! "$parent" = "$command" ] ; then
+            #stderr_echo "$parent and $command are different"
+        #else
+            #stderr_echo "$parent and $command are the same"
+        #fi
+
         case "${words[$counter]}" in
             $(__convox_to_extglob "$subcommands") )
                 subcommand_pos=$counter
                 local subcommand=${words[$counter]}
 
-                # This doesn't work :(
-                # if there's a sub-sub-command, run it
-                # local subsubcommand=${words[$counter-1]}
-                # local subcompletions_func=_convox_${command}_${subsubcommand}
-                # declare -F $subcompletions_func >/dev/null && $subcompletions_func && return 0
-
-                # otherwise proceed as usual
                 local completions_func=_convox_${command}_${subcommand}
-                declare -F $completions_func >/dev/null && $completions_func
+                declare -F $completions_func >/dev/null && $completions_func # && return 0 || stderr_echo "completions_func not found: $completions_func"
+
+                # if there's a sub-sub-command, run it
+                if [ ! "$parent" = "$command" ] ; then
+                    local completions_func=_convox_${command}_${parent}_${subcommand}
+                    #stderr_echo "Trying parent: $completions_func"
+                    declare -F $completions_func >/dev/null && $completions_func # && return 0 || stderr_echo "completions_func not found: $completions_func"
+                fi
                 return 0
                 ;;   
         esac 
@@ -1461,50 +1462,129 @@ _convox_resources() {
     esac
 }
 
-_convox_resources_create() {
-    local subcommands="$(__convox_resource_types)"
-    __convox_subcommands "$subcommands" && return
+__docker_complete_log_options() {
+        # see docs/reference/logging/index.md
+        local awslogs_options="awslogs-region awslogs-group awslogs-stream"
+        local fluentd_options="env fluentd-address fluentd-async-connect fluentd-buffer-limit fluentd-retry-wait fluentd-max-retries labels tag"
+        local gcplogs_options="env gcp-log-cmd gcp-project labels"
+        local gelf_options="env gelf-address gelf-compression-level gelf-compression-type labels tag"
+        local journald_options="env labels tag"
+        local json_file_options="env labels max-file max-size"
+        local syslog_options="env labels syslog-address syslog-facility syslog-format syslog-tls-ca-cert syslog-tls-cert syslog-tls-key syslog-tls-skip-verify tag"
+        local splunk_options="env labels splunk-caname splunk-capath splunk-index splunk-insecureskipverify splunk-source splunk-sourcetype splunk-token splunk-url tag"
 
-    local options_with_args="
+        local all_options="$fluentd_options $gcplogs_options $gelf_options $journald_options $json_file_options $syslog_options $splunk_options"
+
+        case $(__docker_value_of_option --log-driver) in
+                '')
+                        COMPREPLY=( $( compgen -W "$all_options" -S = -- "$cur" ) )
+                        ;;
+                awslogs)
+                        COMPREPLY=( $( compgen -W "$awslogs_options" -S = -- "$cur" ) )
+                        ;;
+                fluentd)
+                        COMPREPLY=( $( compgen -W "$fluentd_options" -S = -- "$cur" ) )
+                        ;;
+                gcplogs)
+                        COMPREPLY=( $( compgen -W "$gcplogs_options" -S = -- "$cur" ) )
+                        ;;
+                gelf)
+                        COMPREPLY=( $( compgen -W "$gelf_options" -S = -- "$cur" ) )
+                        ;;
+                journald)
+                        COMPREPLY=( $( compgen -W "$journald_options" -S = -- "$cur" ) )
+                        ;;
+                json-file)
+                        COMPREPLY=( $( compgen -W "$json_file_options" -S = -- "$cur" ) )
+                        ;;
+                syslog)
+                        COMPREPLY=( $( compgen -W "$syslog_options" -S = -- "$cur" ) )
+                        ;;
+                splunk)
+                        COMPREPLY=( $( compgen -W "$splunk_options" -S = -- "$cur" ) )
+                        ;;
+                *)
+                        return
+                        ;;
+        esac
+
+        __docker_nospace
+}
+
+
+_convox_resources_create() {
+    resources_create_options_with_args="
         --name
     "
-
-    local boolean_options="
+    resources_create_boolean_options="
         --help
     "
+    local all_options="$resources_create_options_with_args $resources_create_boolean_options"
 
-    local all_options="$options_with_args $boolean_options"
     case "$prev" in
-        --name)
+        # if previous word is a flag preceding an argument, don't start completing more flags yet
+        $(__convox_to_extglob "$resources_create_options_with_args") )
+            return
+            ;;
+        --instance-type)
+            __convox_complete_instance_types
+            return
+            ;;
+        $(__convox_to_extglob "$all_options") )
+            _convox_resources_create_${prev}
+            return
+            ;;
+        $(__convox_to_extglob "$(__convox_resource_types)") )
+            RESOURCE_TYPE=$prev
+            _convox_resources_create_${prev}
             return
             ;;
         $(__convox_to_extglob "$options_with_args") )
+            echo "prev is an option with arg"
             return
             ;;
+        *)
+            return
+            ;;
+    esac
+
+    # in case user has backspaced over the resource type we were tracking
+    [ "$prev" = "create" ] && unset RESOURCE_TYPE
+
+    case $RESOURCE_TYPE in
+        $(__convox_to_extglob "$(__convox_resource_types)") )
+            _convox_resources_create_${RESOURCE_TYPE}
+            return
+        ;;
     esac
 
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
-        mysql)
-            _convox_resources_create_mysql
+        $(__convox_to_extglob "$(__convox_resource_types)") )
+            RESOURCE_TYPE=$prev
+            #echo "RESOURCE TYPE: $RESOURCE_TYPE" >> /tmp/resourcetype
+            _convox_resources_create_${prev}
             return
             ;;
         *)
-            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            if [ $cword -eq $counter ]; then
+                __convox_complete_resource_types
+                return
+            fi
+            return
             ;;
     esac
 }
 
-_convox_resources_fluentd() {
-    _convox_resources_create_fluentd
-}
-
 _convox_resources_create_fluentd() {
     local boolean_options="
+        $resources_create_boolean_options
     "
     local options_with_args="
+        $resources_create_options_with_args
         --url
     "
     local all_options="$options_with_args $boolean_options"
@@ -1521,27 +1601,25 @@ _convox_resources_create_fluentd() {
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
-        *)
-            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
-            if [ $cword -eq $counter ]; then
-                __convox_complete_resource_types
-                return
-            fi
-            return
-            ;;
+        #*)
+            #local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            #if [ $cword -eq $counter ]; then
+                #__convox_complete_resource_types
+                #return
+            #fi
+            #return
+            #;;
     esac
-}
-_convox_resources_mysql() {
-    # FIXME: this is needed because of how __convox_subcommands infers the function name
-    _convox_resources_create_mysql
 }
 
 _convox_resources_create_mysql() {
     local boolean_options="
+        $resources_create_boolean_options
         --private
         --multi-az
     "
     local options_with_args="
+        $resources_create_options_with_args
         --allocated-storage
         --database
         --instance-type
@@ -1565,12 +1643,185 @@ _convox_resources_create_mysql() {
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
+        #*)
+            #local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            #if [ $cword -eq $counter ]; then
+                #__convox_complete_resource_types
+                #return
+            #fi
+            #;;
+    esac
+}
+
+_convox_resources_create_postgres() {
+    local boolean_options="
+        $resources_create_boolean_options
+        --multi-az
+        --private
+    "
+    local options_with_args="
+        $resources_create_options_with_args
+        --database
+        --instance-type
+        --max-connections
+        --password
+        --username
+        --version
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+    esac
+}
+
+_convox_resources_create_redis() {
+    local boolean_options="
+        --automatic-failover-enabled
+        $resources_create_boolean_options
+    "
+    local options_with_args="
+        $resources_create_options_with_args
+        --database
+        --instance-type
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+    esac
+}
+
+_convox_resources_create_s3() {
+    local boolean_options="
+        --versioning
+        $resources_create_boolean_options
+    "
+    local options_with_args="
+        $resources_create_options_with_args
+        --topic
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+    esac
+}
+
+_convox_resources_create_sns() {
+    local boolean_options="
+        $resources_create_boolean_options
+    "
+    local options_with_args="
+        $resources_create_options_with_args
+        --queue
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+    esac
+}
+
+_convox_resources_create_sqs() {
+    local boolean_options="
+        $resources_create_boolean_options
+    "
+    local options_with_args="
+        $resources_create_options_with_args
+        --message-retention-period
+        --receive-message-wait-time
+        --visibility-timeout
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            echo "prev is an option with arg"
+            return
+            ;;
         *)
-            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
-            if [ $cword -eq $counter ]; then
-                __convox_complete_resource_types
-                return
-            fi
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+}
+
+_convox_resources_create_syslog() {
+    local boolean_options="
+        $resources_create_boolean_options
+        --private
+    "
+    local options_with_args="
+        $resources_create_options_with_args
+        --url
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
             ;;
     esac
 }
