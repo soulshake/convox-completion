@@ -971,7 +971,7 @@ _convox_builds() {
 
     case "$cur" in
         -*)
-            COMPREPLY=( $( compgen -W "--app --help" -- "$cur" ) )
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         $(__convox_to_extglob "$subcommands") )
             return
@@ -1198,9 +1198,34 @@ _convox_deploy() {
 _convox_env() {
     local subcommands=$(convox env --generate-bash-completion)
     __convox_subcommands "$subcommands" && return
+
+    local options_with_args="
+        --app
+        --rack
+    "
+
+    local boolean_options="
+        --help
+    "
+
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        --app)
+            __convox_complete_apps_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
     case "$cur" in
         -*)
-            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
             COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
