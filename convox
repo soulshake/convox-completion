@@ -662,9 +662,25 @@ _convox_convox() {
 _convox_api() {
     local subcommands=$(convox api --generate-bash-completion)
     __convox_subcommands "$subcommands" && return
+
+    local options_with_args="
+        --rack
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        --rack|-r)
+            __convox_complete_racks_all
+            return
+            ;;
+    esac
+
     case "$cur" in
         -*)
-            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
             COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
@@ -675,9 +691,9 @@ _convox_api() {
 _convox_api_get() {
     local options_with_args="
         --rack
-        --help -h
     "
     local boolean_options="
+        --help
     "
     local all_options="$options_with_args $boolean_options"
 
@@ -1267,6 +1283,38 @@ _convox_instances() {
             ;;
     esac
 }
+
+
+_convox_ps() {
+    local subcommands=$(convox ps --generate-bash-completion)
+    __convox_subcommands "$subcommands" && return
+    local options_with_args="
+        --rack
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            ;;
+    esac
+}
+
+# TODO: convox ps info
+# TODO: convox ps stop
 
 _convox_rack() {
     local subcommands=$(convox rack --generate-bash-completion)
