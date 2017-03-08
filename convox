@@ -14,7 +14,6 @@
 #    below to your .bashrc after bash completion features are loaded
 #    . ~/.convox-completion.sh
 
-# TODO: login --password $ENVVAR
 # Note: The -f option to complete specifies filenames, and -X the filter pattern.
 # http://tldp.org/LDP/abs/html/tabexpansion.html
 # https://brbsix.github.io/2015/11/29/accessing-tab-completion-programmatically-in-bash/
@@ -210,13 +209,17 @@ __convox_complete_instance_types() {
     COMPREPLY=( $( compgen -W "$(__convox_instance_types)" -- "$cur" ) )
 }
 
+__convox_complete_instance_types_as_param() {
+    COMPREPLY=( $( __convox_instance_types -- "$cur" ) )
+}
+
 __convox_complete_regions() {
     COMPREPLY=( $( compgen -W "$(__convox_regions)" -- "$cur" ) )
 }
 
 __convox_complete_app_params() {
-    #COMPREPLY=( $( compgen -S "=" -W "$(__convox_app_params)" -- "$cur" ) )
-    COMPREPLY=( $( "$(__convox_app_params)" -- "$cur" ) )
+    COMPREPLY=( $( compgen -S "=" -W "$(__convox_app_params)" -- "$cur" ) )
+    #COMPREPLY=( $( "$(__convox_app_params)" -- "$cur" ) )
 }
 
 __convox_complete_rack_params() {
@@ -480,8 +483,7 @@ __convox_app_params() {
         <service>Port<port>Certificate
         <service>Port<port>Host
     "
-    #compgen -W "$app_params"
-    compgen -S "=" -o nospace -W "$app_params"
+    compgen -o nospace -W "$app_params"
 }
 
 __convox_rack_params() {
@@ -547,6 +549,7 @@ __convox_yes_or_no() {
         Yes
         No
     "
+    #compgen -P "$prev=" -W "$yes_or_no"
     compgen -W "$yes_or_no"
 }
 
@@ -773,6 +776,14 @@ _convox_apps() {
 }
 
 _convox_apps_cancel() {
+    local options_with_args="
+        --rack
+        --app
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
     case "$prev" in
         --rack)
             __convox_complete_racks_all
@@ -802,9 +813,21 @@ _convox_apps_cancel() {
 }
 
 _convox_apps_delete() {
+    local options_with_args="
+        --rack
+        --app
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
     case "$cur" in
+        --app|-a)
+            __convox_complete_apps_all
+            return
+            ;;
         -*)
-            COMPREPLY=( $( compgen -W "--rack --help" -- "$cur" ) )
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
             __convox_complete_apps_all
@@ -814,9 +837,26 @@ _convox_apps_delete() {
 }
 
 _convox_apps_info() {
+    local options_with_args="
+        --rack
+        --app
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+
     case "$cur" in
+        --app|-a)
+            __convox_complete_apps_all
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
         -*)
-            COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
             __convox_complete_apps_all
@@ -829,12 +869,35 @@ _convox_apps_params() {
     local subcommands=$(convox apps params --generate-bash-completion)
     __convox_subcommands "$subcommands" && return
 
+    local options_with_args="
+        --rack
+        --app
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        --app|-a)
+            __convox_complete_apps_all
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            ;;
+    esac
+
     case "$cur" in
         -*)
-            COMPREPLY=( $( compgen -W "--app --help" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$subcommands") )
-            return
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
             COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
@@ -842,23 +905,22 @@ _convox_apps_params() {
     esac
 }
 
-_convox_apps_set() {
+#_convox_apps_set() {
     # FIXME: this is needed because of how __convox_subcommands infers the function name
-    _convox_apps_params_set
-}
+    #_convox_apps_params_set
+#}
 
 _convox_apps_params_set() {
-    local subcommands="$(__convox_app_params)"
-    __convox_subcommands "$subcommands" && return
+    #local subcommands="$(__convox_app_params)"
+    #__convox_subcommands "$subcommands" && return
 
     local options_with_args="
+        --rack
+        --app
     "
 
     local boolean_options="
         --help
-        --rack
-        --app -a
-        --help -h
     "
 
     local all_options="$options_with_args $boolean_options"
@@ -867,13 +929,21 @@ _convox_apps_params_set() {
             __convox_complete_apps_all
             return
             ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        Private|Internal)
+            __convox_complete_yes_or_no
+            return
+            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
         *)
-            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            __convox_complete_app_params
+            #COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
             #COMPREPLY=( $( compgen -S "=" -W "$subcommands" -- "$cur" ) )
-            #__convox_complete_app_params
             #__convox_append_to_completions "="
             #__convox_nospace
             ;;
@@ -883,16 +953,8 @@ _convox_apps_params_set() {
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
-        --app|-a)
-            __convox_complete_apps_all
-            return
-            ;;
-        --rack)
-            __convox_complete_racks_all
-            return
-            ;;
         *)
-            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            #COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
             __convox_nospace
             ;;
     esac
@@ -1310,6 +1372,10 @@ _convox_instances() {
 }
 
 
+# TODO: login --password $ENVVAR
+# TODO: convox logs
+# TODO: convox proxy
+
 _convox_ps() {
     local subcommands=$(convox ps --generate-bash-completion)
     __convox_subcommands "$subcommands" && return
@@ -1461,10 +1527,10 @@ _convox_rack_params_set() {
             __convox_complete_yes_or_no
             return
             ;;
-        #InstanceType*)
-            #__convox_complete_instance_types
-            #return
-            #;;
+        InstanceType)
+            __convox_complete_instance_types_as_param
+            return
+            ;;
         --rack|-r)
             __convox_complete_racks_all
             return
@@ -1478,10 +1544,10 @@ _convox_rack_params_set() {
     esac
 
     case "$cur" in
-        #InstanceType*)
-            #__convox_complete_instance_types
-            #return
-            #;;
+        InstanceType)
+            __convox_complete_instance_types
+            return
+            ;;
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
@@ -1623,6 +1689,8 @@ _convox_rack_releases() {
             ;;
     esac
 }
+
+# TODO: convox racks
 
 _convox_registries() {
     local subcommands=$(convox registries --generate-bash-completion)
