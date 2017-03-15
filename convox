@@ -125,19 +125,23 @@ __convox_complete_api_endpoints() {
     COMPREPLY=( $( compgen -W "$(__convox_api_endpoints)" -- "$cur" ) )
 }
 
-__convox_complete_apps_all() {
+__convox_complete_apps_by_rack() {
+    local rack=$(__convox_value_of_option "--rack")
+    local rack_flag
+    if [[ $rack == "" ]]; then
+        rack_flag=""
+    else
+        rack_flag="--rack"
+    fi
     local IFS=$'\n'
-    local apps=( $(__convox_q apps | grep -v APP | awk '{ print $1 }') )
+    local apps=""
     if [ "$1" ]; then
-        apps=( $(__convox_q apps | grep "^$1" | grep -v APP | awk '{ print $1 }') )
+        apps=( $(__convox_q apps $rack_flag $rack | grep "^$1" | grep -v APP | awk '{ print $1 }') )
+    else
+        apps=( $(__convox_q apps $rack_flag $rack | grep -v APP | awk '{ print $1 }') )
     fi
     unset IFS
     COMPREPLY=( $(compgen -W "${apps[*]}" -- "$cur") )
-}
-
-__convox_complete_apps_by_rack() {
-    # TODO
-    __convox_complete_apps_all
 }
 
 __convox_complete_app_params() {
@@ -656,7 +660,7 @@ _convox_convox() {
 
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --config)
@@ -788,7 +792,6 @@ _convox_apps() {
     esac
     case "$cur" in
         -*)
-            #COMPREPLY=( $( compgen -W "--help" -- "$cur" ) )
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
@@ -821,11 +824,7 @@ _convox_apps_cancel() {
     esac
     case "$cur" in
         -*)
-            COMPREPLY=( $( compgen -W "--help --app -a --rack" -- "$cur" ) )
-            ;;
-        --app|-a)
-            __convox_complete_apps_all
-            return
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
             COMPREPLY=( $( compgen -W "$global_options_with_args" -- "$cur" ) )
@@ -845,14 +844,14 @@ _convox_apps_delete() {
     local all_options="$options_with_args $boolean_options"
     case "$cur" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
     esac
@@ -868,20 +867,26 @@ _convox_apps_info() {
     "
     local all_options="$options_with_args $boolean_options"
 
-    case "$cur" in
+    case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
     esac
@@ -902,7 +907,7 @@ _convox_apps_params() {
 
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -939,7 +944,7 @@ _convox_apps_params_set() {
 
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -1026,7 +1031,7 @@ _convox_builds() {
 
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         $(__convox_to_extglob "$options_with_args") )
@@ -1064,7 +1069,7 @@ _convox_builds_create() {
 
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -1103,7 +1108,7 @@ _convox_builds_delete() {
 
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -1147,7 +1152,7 @@ _convox_builds_export() {
             return
             ;;
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --file|-f)
@@ -1186,7 +1191,7 @@ _convox_builds_import() {
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -1221,7 +1226,7 @@ _convox_builds_info() {
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -1256,7 +1261,7 @@ _convox_builds_logs() {
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -1307,7 +1312,7 @@ _convox_deploy() {
             return
             ;;
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         $(__convox_to_extglob "$options_with_args") )
@@ -1357,7 +1362,7 @@ _convox_env() {
             return
             ;;
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         $(__convox_to_extglob "$options_with_args") )
@@ -1523,7 +1528,7 @@ _convox_logs() {
 
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -1989,7 +1994,7 @@ _convox_releases() {
             return
             ;;
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
     esac
@@ -2026,7 +2031,7 @@ _convox_releases_promote() {
             return
             ;;
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
     esac
@@ -2638,7 +2643,7 @@ _convox_run() {
             return
             ;;
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --release|-r)
@@ -2671,7 +2676,7 @@ _convox_scale() {
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -2708,7 +2713,7 @@ _convox_ssl() {
             return
             ;;
         --app|-a)
-            __convox_complete_apps_all
+            __convox_complete_apps_by_rack
             return
             ;;
     esac
@@ -2805,6 +2810,11 @@ _convox_uninstall() {
             # if this is the second non-flag argument, complete regions
             elif [ $cword -eq $(($counter + 1)) ]; then
                 __convox_complete_regions
+                return
+
+            # if this is the third non-flag argument, complete files
+            elif [ $cword -eq $(($counter + 2)) ]; then
+                _filedir -f
                 return
             fi
             ;;
