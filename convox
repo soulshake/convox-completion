@@ -121,10 +121,8 @@ __convox_to_extglob() {
 ### DYNAMIC COMPLETIONS ###
 ###########################
 
-__convox_complete_builds_all() {
-    # TODO: list actual builds
-    builds="$(__convox_builds)"
-    COMPREPLY=( $(compgen -W "$builds" -- "$cur") )
+__convox_complete_api_endpoints() {
+    COMPREPLY=( $( compgen -W "$(__convox_api_endpoints)" -- "$cur" ) )
 }
 
 __convox_complete_apps_all() {
@@ -142,23 +140,35 @@ __convox_complete_apps_by_rack() {
     __convox_complete_apps_all
 }
 
+__convox_complete_app_params() {
+    COMPREPLY=( $( compgen -S "=" -W "$(__convox_app_params)" -- "$cur" ) )
+}
+
+__convox_complete_builds_all() {
+    builds="$(__convox_builds)"
+    COMPREPLY=( $(compgen -W "$builds" -- "$cur") )
+}
+
 __convox_complete_email() {
     if [ -f "$HOME/.convox/id" ]; then
         COMPREPLY=( $(compgen -W "$(cat $HOME/.convox/id)" -- "$cur") )
     fi
 }
 
-# FIXME: this returns releases, not available rack versions
-__convox_complete_rack_versions() {
+__convox_complete_hosts() {
     local IFS=$'\n'
-    local version=""
+    local hosts=""
     if [ "$1" ]; then
-        versions=( $(__convox_q rack releases | grep "^$1" | grep -v VERSION | awk '{ print $1 }') )
+        hosts=( $(_convox_hosts | grep "^$1") )
     else
-        versions=( $(__convox_q rack releases | grep -v VERSION | awk '{ print $1 }') )
+        hosts=( $(_convox_hosts ) ) #-- "\$$cur" ) )
     fi
     unset IFS
-    COMPREPLY=( $(compgen -W "${versions[*]}" -- "$cur") )
+    COMPREPLY=( $( compgen -W "${hosts[*]}" -- "$cur" ) )
+}
+
+__convox_complete_env_vars() {
+    COMPREPLY=( $( _env_vars -- "\$$cur" ) )
 }
 
 # TODO: releases per app (currently only works in app-specific directory
@@ -179,11 +189,63 @@ __convox_builds() {
     echo "$builds"
 }
 
+__convox_complete_instance_types() {
+    COMPREPLY=( $( compgen -W "$(__convox_instance_types)" -- "$cur" ) )
+}
+
+__convox_complete_instance_types_as_param() {
+    COMPREPLY=( $( __convox_instance_types -- "$cur" ) )
+}
+
 __convox_complete_racks_all() {
     local IFS=$'\n'
     local racks=( $(__convox_racks $1) )
     unset IFS
     COMPREPLY=( $(compgen -W "${racks[*]}" -- "$cur") )
+}
+
+__convox_complete_rack_params() {
+    COMPREPLY=( $( "$(__convox_rack_params)" -- "$cur" ) )
+}
+
+# FIXME: this returns releases, not available rack versions
+__convox_complete_rack_versions() {
+    local IFS=$'\n'
+    local version=""
+    if [ "$1" ]; then
+        versions=( $(__convox_q rack releases | grep "^$1" | grep -v VERSION | awk '{ print $1 }') )
+    else
+        versions=( $(__convox_q rack releases | grep -v VERSION | awk '{ print $1 }') )
+    fi
+    unset IFS
+    COMPREPLY=( $(compgen -W "${versions[*]}" -- "$cur") )
+}
+
+__convox_registries() {
+    if [ "$1" ]; then
+        __convox_q registries | grep "^$1" | grep -v SERVER | awk '{ print $1 }'
+    else
+        __convox_q registries | grep -v SERVER | awk '{ print $1 }'
+    fi
+}
+
+__convox_complete_registries() {
+    local IFS=$'\n'
+    local registries="$(__convox_registries)"
+    unset IFS
+    COMPREPLY=( $(compgen -W "${registries[*]}" -- "$cur") )
+}
+
+__convox_complete_regions() {
+    COMPREPLY=( $( compgen -W "$(__convox_regions)" -- "$cur" ) )
+}
+
+__convox_complete_resource_types() {
+    # only complete resource types if it hasn't already appeared
+    # TODO: this only works if the user tab-completed the resource type
+    if [ -z $RESOURCE_TYPE ]; then
+        COMPREPLY=( $( compgen -W "$(__convox_resource_types)" -- "$cur" ) )
+    fi
 }
 
 __convox_complete_resources_all() {
@@ -206,63 +268,6 @@ __convox_complete_stacks_all() {
 __convox_complete_yes_or_no() {
     COMPREPLY=( $( __convox_yes_or_no -- "$cur" ) )
 }
-
-__convox_complete_get_api_endpoints() {
-    COMPREPLY=( $( compgen -W "$(__convox_api_endpoints)" -- "$cur" ) )
-}
-
-__convox_complete_delete_api_endpoints() {
-    COMPREPLY=( $( compgen -W "$(__convox_api_endpoints)" -- "$cur" ) )
-}
-
-__convox_complete_resource_types() {
-    # only complete resource types if it hasn't already appeared
-    # TODO: this only works if the user tab-completed the resource type
-    if [ -z $RESOURCE_TYPE ]; then
-        COMPREPLY=( $( compgen -W "$(__convox_resource_types)" -- "$cur" ) )
-    fi
-}
-
-__convox_complete_instance_types() {
-    COMPREPLY=( $( compgen -W "$(__convox_instance_types)" -- "$cur" ) )
-}
-
-__convox_complete_instance_types_as_param() {
-    COMPREPLY=( $( __convox_instance_types -- "$cur" ) )
-}
-
-__convox_complete_regions() {
-    COMPREPLY=( $( compgen -W "$(__convox_regions)" -- "$cur" ) )
-}
-
-__convox_complete_app_params() {
-    COMPREPLY=( $( compgen -S "=" -W "$(__convox_app_params)" -- "$cur" ) )
-}
-
-__convox_complete_rack_params() {
-    COMPREPLY=( $( "$(__convox_rack_params)" -- "$cur" ) )
-}
-
-__convox_complete_hosts() {
-    local IFS=$'\n'
-    local hosts=""
-    if [ "$1" ]; then
-        hosts=( $(_convox_hosts | grep "^$1") )
-    else
-        hosts=( $(_convox_hosts ) ) #-- "\$$cur" ) )
-    fi
-    unset IFS
-    COMPREPLY=( $( compgen -W "${hosts[*]}" -- "$cur" ) )
-}
-
-__convox_complete_env_vars() {
-    COMPREPLY=( $( _env_vars -- "\$$cur" ) )
-}
-
-
-
-
-
 
 ###################
 ### SUBCOMMANDS ###
@@ -320,8 +325,13 @@ _env_vars() {
 }
 
 __convox_stacks() {
-    __convox_q racks | grep -v RACK | awk '{ print $1 }' | tr '/' " " | awk '{ print $2 }'
+    if [ "$1" ]; then
+        __convox_q racks | grep ^$1 | grep -v RACK | awk '{ print $1 }' | tr '/' " " | awk '{ print $2 }'
+    else
+        __convox_q racks | grep -v RACK | awk '{ print $1 }' | tr '/' " " | awk '{ print $2 }'
+    fi
 }
+
 __convox_resources() {
     if [ "$1" ]; then
         __convox_q resources | grep ^$1 | grep -v NAME | awk '{ print $1 }'
@@ -375,6 +385,8 @@ __convox_resource_types() {
 }
 
 # https://aws.amazon.com/ec2/instance-types/
+# https://github.com/convox/rack/blob/master/provider/aws/helpers.go#L633-L695
+# TODO: add ability to request these from Rack
 __convox_instance_types() {
     instance_types="
         t2.nano
@@ -726,7 +738,7 @@ _convox_api_get() {
         *)
             local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
             if [ $cword -eq $counter ]; then
-                __convox_complete_get_api_endpoints
+                __convox_complete_api_endpoints
             fi
             ;;
     esac
@@ -749,7 +761,7 @@ _convox_api_delete() {
         *)
             local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
             if [ $cword -eq $counter ]; then
-                __convox_complete_delete_api_endpoints
+                __convox_complete_api_endpoints
             fi
             ;;
     esac
@@ -1933,9 +1945,31 @@ _convox_registries_add() {
     esac
 }
 
-# TODO: convox registries
-# TODO: convox registries add
-# TODO: convox registries remove
+_convox_registries_remove() {
+    local options_with_args="
+        --rack
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            __convox_complete_registries
+            return
+            ;;
+    esac
+}
 
 _convox_releases() {
     local subcommands=$(convox releases --generate-bash-completion)
@@ -2130,6 +2164,7 @@ _convox_resources_link() {
 }
 
 # TODO: convox resources proxy
+
 _convox_resources_unlink() {
     local options_with_args="
         --app
@@ -2750,13 +2785,8 @@ _convox_uninstall() {
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
-        # FIXME: complete regions
-        #$(__convox_to_extglob $(__convox_stacks)) )
-            #COMPREPLY=( $( __convox_regions -- "$cur" ) )
-            #COMPREPLY=( $( __convox_complete_regions -- "$cur" ) )
-            #;;
-        *)
-            __convox_complete_stacks_all
+        $(__convox_to_extglob "$(__convox_stacks)") )
+            __convox_complete_regions
             return
             ;;
     esac
@@ -2766,13 +2796,14 @@ _convox_uninstall() {
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
-
-            #local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
-            #if [ $cword -eq $counter ]; then
-                #__convox_complete_resource_types
-            #fi
             local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            # if this is the first non-flag argument, complete stacks
             if [ $cword -eq $counter ]; then
+                __convox_complete_stacks_all
+                return
+
+            # if this is the second non-flag argument, complete regions
+            elif [ $cword -eq $(($counter + 1)) ]; then
                 __convox_complete_regions
                 return
             fi
