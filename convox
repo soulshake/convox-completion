@@ -133,6 +133,7 @@ __convox_complete_apps_by_rack() {
     else
         rack_flag="--rack"
     fi
+
     local IFS=$'\n'
     local apps=""
     if [ "$1" ]; then
@@ -193,12 +194,35 @@ __convox_builds() {
     echo "$builds"
 }
 
+__convox_complete_build_instance_types() {
+    COMPREPLY=( $( compgen -W "$(__convox_build_instance_types)" -- "$cur" ) )
+}
+
 __convox_complete_instance_types() {
     COMPREPLY=( $( compgen -W "$(__convox_instance_types)" -- "$cur" ) )
 }
 
 __convox_complete_instance_types_as_param() {
     COMPREPLY=( $( __convox_instance_types -- "$cur" ) )
+}
+__convox_complete_instances_by_rack() {
+    local rack=$(__convox_value_of_option "--rack")
+    local rack_flag
+    if [[ $rack == "" ]]; then
+        rack_flag=""
+    else
+        rack_flag="--rack"
+    fi
+
+    local IFS=$'\n'
+    local instances=""
+    if [ "$1" ]; then
+        instances=( $(__convox_q instances $rack_flag $rack | grep "^$1" | grep -v AGENT | awk '{ print $1 }') )
+    else
+        instances=( $(__convox_q instances $rack_flag $rack | grep -v AGENT | awk '{ print $1 }') )
+    fi
+    unset IFS
+    COMPREPLY=( $(compgen -W "${instances[*]}" -- "$cur") )
 }
 
 __convox_complete_racks_all() {
@@ -663,10 +687,6 @@ _convox_convox() {
             __convox_complete_apps_by_rack
             return
             ;;
-        --config)
-            _filedir -d
-            return
-            ;;
         --rack|-r)
             __convox_complete_racks_all
             return
@@ -998,7 +1018,7 @@ _convox_build() {
             return
             ;;
         --file|-f)
-            _filedir -f
+            _filedir -f -X '!*.@(yml|YML|yaml|YAML)'
             return
             ;;
         $(__convox_to_extglob "$options_with_args") )
@@ -1011,6 +1031,12 @@ _convox_build() {
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
         *)
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            # if this is the first non-flag argument, complete directories
+            if [ $cword -eq $counter ]; then
+                _filedir -d
+            fi
+            return
             ;;
     esac
 
@@ -1074,9 +1100,11 @@ _convox_builds_create() {
             ;;
         --rack)
             __convox_complete_racks_all
+            return
             ;;
-        -f|--file)
-            _filedir -f *.yml
+        --file|-f)
+            _filedir -f -X '!*.@(yml|YML|yaml|YAML)'
+            return
             ;;
         $(__convox_to_extglob "$options_with_args") )
             return
@@ -1093,6 +1121,7 @@ _convox_builds_create() {
                 _filedir -d
                 return
             fi
+            return
             ;;
     esac
 }
@@ -1147,16 +1176,16 @@ _convox_builds_export() {
     local all_options="$options_with_args $boolean_options"
 
     case "$prev" in
-        --rack)
-            __convox_complete_racks_all
-            return
-            ;;
         --app|-a)
             __convox_complete_apps_by_rack
             return
             ;;
         --file|-f)
             _filedir -f
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
             ;;
         $(__convox_to_extglob "$options_with_args") )
             return
@@ -1288,31 +1317,31 @@ _convox_builds_logs() {
 _convox_deploy() {
     local options_with_args="
         --app
-        --rack
-        --file
         --description
+        --file
+        --rack
     "
 
     local boolean_options="
         --help
-        --no-cache
         --id
         --incremental
+        --no-cache
         --wait
     "
 
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
         --file|-f)
-            _filedir -f
+            _filedir -f -X '!*.@(yml|YML|yaml|YAML)'
             return
             ;;
         --rack)
             __convox_complete_racks_all
-            return
-            ;;
-        --app|-a)
-            __convox_complete_apps_by_rack
             return
             ;;
         $(__convox_to_extglob "$options_with_args") )
@@ -1357,12 +1386,12 @@ _convox_env() {
 
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
-        --rack)
-            __convox_complete_racks_all
-            return
-            ;;
         --app|-a)
             __convox_complete_apps_by_rack
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
             return
             ;;
         $(__convox_to_extglob "$options_with_args") )
@@ -1380,30 +1409,193 @@ _convox_env() {
     esac
 }
 
-# TODO: convox_env_get
-# TODO: convox_env_set
-# TODO: convox_env_unset
+_convox_env_get() {
+    local options_with_args="
+        --app
+        --rack
+    "
 
-# TODO: convox_exec
+    local boolean_options="
+        --help
+    "
 
-# TODO: convox_init
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
 
-# TODO: versions
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            return
+            ;;
+    esac
+}
+
+_convox_env_set() {
+    local options_with_args="
+        --app
+        --rack
+    "
+
+    local boolean_options="
+        --help
+        --id
+        --promote
+        --wait
+    "
+
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            return
+            ;;
+    esac
+}
+
+_convox_env_unset() {
+    local options_with_args="
+        --app
+        --rack
+    "
+
+    local boolean_options="
+        --help
+        --id
+        --promote
+        --wait
+    "
+
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            return
+            ;;
+    esac
+}
+
+_convox_exec() {
+    local options_with_args="
+        --app
+        --rack
+    "
+
+    local boolean_options="
+        --help
+    "
+
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            return
+            ;;
+    esac
+}
+
+_convox_init() {
+    local options_with_args="
+    "
+
+    local boolean_options="
+        --boilerplate
+        --help
+    "
+
+    local all_options="$options_with_args $boolean_options"
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            if [ $cword -eq $counter ]; then
+                _filedir -d
+                return
+            fi
+            ;;
+    esac
+}
+
+
 _convox_install() {
     local options_with_args="
-        --email
         --ami
         --build-instance
+        --email
         --existing-vpc
         --instance-count
-        --instance-type
         --internet-gateway
+        --instance-type
         --private-cidrs
         --region
         --stack-name
+        --subnet-cidrs
         --version
         --vpc-cidr
-        --subnet-cidrs
     "
 
     local boolean_options="
@@ -1415,20 +1607,19 @@ _convox_install() {
 
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
-        --name)
+        --build-instance)
+            __convox_complete_build_instance_types
+            ;;
+        --instance-type)
+            __convox_complete_instance_types
             return
             ;;
         --region)
             __convox_complete_regions
-            #COMPREPLY=( $( __convox_regions -- "$cur" ) )
             return
             ;;
-        --build-instance)
-            # TODO
-            COMPREPLY=( $( __convox_build_instance_types -- "$cur" ) )
-            ;;
-        --instance-type)
-            __convox_complete_instance_types
+        --version)
+            # TODO: versions
             return
             ;;
         $(__convox_to_extglob "$options_with_args") )
@@ -1443,7 +1634,7 @@ _convox_install() {
         *)
             local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
             if [ $cword -eq $counter ]; then
-                _filedir -f
+                _filedir -f -X '!*.@(csv|CSV)'
                 return
             fi
             ;;
@@ -1454,6 +1645,7 @@ _convox_install() {
 _convox_instances() {
     local subcommands=$(convox instances --generate-bash-completion)
     __convox_subcommands "$subcommands" && return
+
     local options_with_args="
         --rack
     "
@@ -1482,11 +1674,92 @@ _convox_instances() {
     esac
 }
 
-# TODO: convox instances keyroll
-# TODO: convox instances ssh
-# TODO: convox instances terminate
+_convox_instances_keyroll() {
+    local options_with_args="
+        --rack
+    "
 
-# TODO: complete hosts from ~/.convox/auth
+    local boolean_options="
+        --help
+    "
+
+    local all_options="$options_with_args $boolean_options"
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+    esac
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            return
+            ;;
+    esac
+}
+
+_convox_instances_ssh() {
+    local options_with_args="
+        --rack
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+    esac
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            # if this is the first non-flag argument, complete instance IDs
+            if [ $cword -eq $counter ]; then
+                __convox_complete_instances_by_rack
+            fi
+            return
+            ;;
+    esac
+}
+
+_convox_instances_terminate() {
+    local options_with_args="
+        --rack
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+    esac
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            # if this is the first non-flag argument, complete instance IDs
+            if [ $cword -eq $counter ]; then
+                __convox_complete_instances_by_rack
+            fi
+            return
+            ;;
+    esac
+}
+
 _convox_login() {
     local options_with_args="
         --password
@@ -1513,7 +1786,6 @@ _convox_login() {
     esac
 }
 
-# TODO: convox logs
 _convox_logs() {
     local options_with_args="
         --app
@@ -2741,7 +3013,7 @@ _convox_start() {
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
         --file|-f)
-            _filedir -f
+            _filedir -f -X '!*.@(yml|YML|yaml|YAML)'
             return
             ;;
         $(__convox_to_extglob "$boolean_options") )
@@ -2814,7 +3086,7 @@ _convox_uninstall() {
 
             # if this is the third non-flag argument, complete files
             elif [ $cword -eq $(($counter + 2)) ]; then
-                _filedir -f
+                _filedir -f -X '!*.@(csv|CSV)'
                 return
             fi
             ;;
