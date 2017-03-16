@@ -83,6 +83,29 @@ __convox_pos_first_nonflag() {
     echo $counter
 }
 
+# Returns the value of the first option matching option_glob.
+# Valid values for option_glob are option names like '--log-level' and
+# globs like '--log-level|-l'
+# Only positions between the command and the current word are considered.
+__convox_value_of_option() {
+    local option_extglob=$(__convox_to_extglob "$1")
+
+    local counter=$((command_pos + 1))
+    while [ $counter -lt $cword ]; do
+            case ${words[$counter]} in
+                    $option_extglob )
+                            echo ${words[$counter + 1]}
+                            break
+                            ;;
+            esac
+            (( counter++ ))
+    done
+}
+
+__convox_value_of_first_non_option() {
+    echo ${words[$(__convox_pos_first_nonflag)]}
+}
+
 # __convox_nospace suppresses trailing whitespace
 __convox_nospace() {
 	# compopt is not available in ancient bash versions
@@ -223,6 +246,10 @@ __convox_complete_instances_by_rack() {
     fi
     unset IFS
     COMPREPLY=( $(compgen -W "${instances[*]}" -- "$cur") )
+}
+__convox_complete_pids_by_app() {
+    # TODO... maybe
+    return
 }
 
 __convox_complete_racks_all() {
@@ -1822,24 +1849,49 @@ _convox_logs() {
     esac
 }
 
-# TODO: convox proxy
-
-_convox_ps() {
-    local subcommands=$(convox ps --generate-bash-completion)
-    __convox_subcommands "$subcommands" && return
+_convox_proxy() {
     local options_with_args="
         --rack
-        --app
     "
     local boolean_options="
-        --stats
         --help
     "
     local all_options="$options_with_args $boolean_options"
 
     case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            return
+            ;;
+    esac
+}
+
+_convox_ps() {
+    local subcommands=$(convox ps --generate-bash-completion)
+    __convox_subcommands "$subcommands" && return
+
+    local options_with_args="
+        --app
+        --rack
+    "
+    local boolean_options="
+        --help
+        --stats
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
         --app|-a)
-            __convox_complete_app_all
+            __convox_complete_apps_by_rack
             return
             ;;
         --rack)
@@ -1859,11 +1911,44 @@ _convox_ps() {
 }
 
 # TODO: convox ps info
-# TODO: convox ps stop
+
+_convox_ps_stop() {
+    local options_with_args="
+        --app
+        --rack
+    "
+    local boolean_options="
+        --help
+        --stats
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            __convox_complete_pids_by_app
+            return
+            ;;
+    esac
+}
 
 _convox_rack() {
     local subcommands=$(convox rack --generate-bash-completion)
     __convox_subcommands "$subcommands" && return
+
     local options_with_args="
         --rack
     "
@@ -1891,8 +1976,8 @@ _convox_rack() {
 
 _convox_rack_logs() {
     local options_with_args="
-        --rack
         --filter
+        --rack
         --since
     "
     local boolean_options="
@@ -1906,11 +1991,11 @@ _convox_rack_logs() {
             __convox_complete_racks_all
             return
             ;;
-        *)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
     esac
 
@@ -1921,9 +2006,6 @@ _convox_rack_logs() {
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
-        #*)
-            #COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
-            #;;
         esac
 }
 
@@ -1965,20 +2047,19 @@ _convox_rack_params_set() {
 
     local options_with_args="
     "
-
     local boolean_options="
         --rack
         --help
     "
-
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
-        Private|Internal)
-            __convox_complete_yes_or_no
-            return
-            ;;
         InstanceType)
             __convox_complete_instance_types_as_param
+            return
+            ;;
+        Internal|Private|PrivateApi)
+            __convox_complete_yes_or_no
             return
             ;;
         --rack|-r)
@@ -1994,10 +2075,6 @@ _convox_rack_params_set() {
     esac
 
     case "$cur" in
-        InstanceType)
-            __convox_complete_instance_types
-            return
-            ;;
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
@@ -2009,37 +2086,30 @@ _convox_rack_params_set() {
 }
 
 _convox_rack_ps() {
-    local subcommands=$(convox rack ps --generate-bash-completion)
-    __convox_subcommands "$subcommands" && return
-
     local options_with_args="
         --rack
     "
     local boolean_options="
+        --all
+        --help
         --stats
-        -a --all
     "
-
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --rack|-r)
             __convox_complete_racks_all
             return
             ;;
-        *)
-            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
+
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
-        $(__convox_to_extglob "$options_with_args") )
-        return
-        ;;
     esac
 }
 
@@ -2053,6 +2123,7 @@ _convox_rack_scale() {
         --help
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --rack)
             __convox_complete_racks_all
@@ -2062,17 +2133,15 @@ _convox_rack_scale() {
             __convox_complete_instance_types
             return
             ;;
-        --count)
+        $(__convox_to_extglob "$options_with_args") )
             return
-            ;;
+        ;;
     esac
+
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
-        $(__convox_to_extglob "$options_with_args") )
-        return
-        ;;
     esac
 }
 
@@ -2081,10 +2150,11 @@ _convox_rack_update() {
         --rack
     "
     local boolean_options="
-        --wait
         --help
+        --wait
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --rack)
             __convox_complete_racks_all
@@ -2092,9 +2162,10 @@ _convox_rack_update() {
             ;;
         --wait)
             __convox_complete_rack_versions
-            #return
+            return
             ;;
     esac
+
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
@@ -2118,29 +2189,20 @@ _convox_rack_releases() {
         --help
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --rack)
             __convox_complete_racks_all
             return
             ;;
-        --unpublished)
-            return
-            ;;
     esac
+
     case "$cur" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            return
-            ;;
         *)
-            return
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
     esac
 }
-
-# TODO: convox racks
 
 _convox_racks() {
     local options_with_args="
@@ -2149,6 +2211,7 @@ _convox_racks() {
         --help
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$cur" in
         *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
@@ -2177,6 +2240,7 @@ _convox_registries() {
             COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
             ;;
     esac
+
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
@@ -2187,18 +2251,18 @@ _convox_registries() {
     esac
 }
 
-
 _convox_registries_add() {
     local options_with_args="
+        --email
         --rack
-        --email -e
-        --username -u
-        --password -p
+        --password
+        --username
     "
     local boolean_options="
         --help
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --rack)
             __convox_complete_racks_all
@@ -2206,9 +2270,11 @@ _convox_registries_add() {
             ;;
         --email)
             __convox_complete_email
+            return
             ;;
         --password)
             __convox_complete_env_vars
+            return
             ;;
     esac
 
@@ -2230,6 +2296,7 @@ _convox_registries_remove() {
         --help
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --rack)
             __convox_complete_racks_all
@@ -2253,6 +2320,8 @@ _convox_releases() {
     __convox_subcommands "$subcommands" && return
 
     local options_with_args="
+        --app
+        --limit
         --rack
     "
     local boolean_options="
@@ -2261,12 +2330,49 @@ _convox_releases() {
     local all_options="$options_with_args $boolean_options"
 
     case "$prev" in
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
         --rack)
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            COMPREPLY=( $( compgen -W "$subcommands" -- "$cur" ) )
+            ;;
+    esac
+}
+
+_convox_releases_info() {
+    local options_with_args="
+        --app
+        --rack
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
         --app|-a)
             __convox_complete_apps_by_rack
+            return
+            ;;
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
@@ -2284,13 +2390,10 @@ _convox_releases() {
     esac
 }
 
-# TODO: convox releases info
-# TODO: convox releases promote
-
 _convox_releases_promote() {
     local options_with_args="
-        --rack
         --app
+        --rack
     "
     local boolean_options="
         --help
@@ -2298,20 +2401,20 @@ _convox_releases_promote() {
     local all_options="$options_with_args $boolean_options"
 
     case "$prev" in
+        --app|-a)
+            __convox_complete_apps_by_rack
+            return
+            ;;
         --rack)
             __convox_complete_racks_all
             return
             ;;
-        --app|-a)
-            __convox_complete_apps_by_rack
+        $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
 
     case "$cur" in
-        $(__convox_to_extglob "$options_with_args") )
-            return
-            ;;
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
@@ -2339,6 +2442,9 @@ _convox_resources() {
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
     esac
 
     case "$cur" in
@@ -2364,13 +2470,13 @@ _convox_resources_delete() {
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
     esac
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            return
             ;;
         *)
             __convox_complete_resources_all
@@ -2392,13 +2498,13 @@ _convox_resources_info() {
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
     esac
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            return
             ;;
         *)
             __convox_complete_resources_all
@@ -2425,13 +2531,13 @@ _convox_resources_link() {
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
     esac
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            return
             ;;
         *)
             __convox_complete_resources_all
@@ -2440,7 +2546,35 @@ _convox_resources_link() {
     esac
 }
 
-# TODO: convox resources proxy
+_convox_resources_proxy() {
+    local options_with_args="
+        --listen
+        --rack
+    "
+    local boolean_options="
+        --help
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
+        --rack)
+            __convox_complete_racks_all
+            return
+            ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
+    esac
+
+    case "$cur" in
+        -*)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            ;;
+        *)
+            return
+            ;;
+    esac
+}
 
 _convox_resources_unlink() {
     local options_with_args="
@@ -2451,6 +2585,7 @@ _convox_resources_unlink() {
         --help
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --app|-a)
             __convox_complete_apps_by_rack
@@ -2460,13 +2595,14 @@ _convox_resources_unlink() {
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
     esac
+
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            return
             ;;
         *)
             __convox_complete_resources_all
@@ -2483,18 +2619,20 @@ _convox_resources_update() {
         --help
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --rack)
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
     esac
+
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            return
             ;;
         *)
             __convox_complete_resources_all
@@ -2512,6 +2650,7 @@ _convox_resources_url() {
         --help
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --app|-a)
             __convox_complete_apps_by_rack
@@ -2521,13 +2660,14 @@ _convox_resources_url() {
             __convox_complete_racks_all
             return
             ;;
+        $(__convox_to_extglob "$options_with_args") )
+            return
+            ;;
     esac
+
     case "$cur" in
         -*)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            return
             ;;
         *)
             __convox_complete_resources_all
@@ -2535,56 +2675,6 @@ _convox_resources_url() {
             ;;
     esac
 }
-
-__docker_complete_log_options() {
-        # see docs/reference/logging/index.md
-        local awslogs_options="awslogs-region awslogs-group awslogs-stream"
-        local fluentd_options="env fluentd-address fluentd-async-connect fluentd-buffer-limit fluentd-retry-wait fluentd-max-retries labels tag"
-        local gcplogs_options="env gcp-log-cmd gcp-project labels"
-        local gelf_options="env gelf-address gelf-compression-level gelf-compression-type labels tag"
-        local journald_options="env labels tag"
-        local json_file_options="env labels max-file max-size"
-        local syslog_options="env labels syslog-address syslog-facility syslog-format syslog-tls-ca-cert syslog-tls-cert syslog-tls-key syslog-tls-skip-verify tag"
-        local splunk_options="env labels splunk-caname splunk-capath splunk-index splunk-insecureskipverify splunk-source splunk-sourcetype splunk-token splunk-url tag"
-
-        local all_options="$fluentd_options $gcplogs_options $gelf_options $journald_options $json_file_options $syslog_options $splunk_options"
-
-        case $(__docker_value_of_option --log-driver) in
-                '')
-                        COMPREPLY=( $( compgen -W "$all_options" -S = -- "$cur" ) )
-                        ;;
-                awslogs)
-                        COMPREPLY=( $( compgen -W "$awslogs_options" -S = -- "$cur" ) )
-                        ;;
-                fluentd)
-                        COMPREPLY=( $( compgen -W "$fluentd_options" -S = -- "$cur" ) )
-                        ;;
-                gcplogs)
-                        COMPREPLY=( $( compgen -W "$gcplogs_options" -S = -- "$cur" ) )
-                        ;;
-                gelf)
-                        COMPREPLY=( $( compgen -W "$gelf_options" -S = -- "$cur" ) )
-                        ;;
-                journald)
-                        COMPREPLY=( $( compgen -W "$journald_options" -S = -- "$cur" ) )
-                        ;;
-                json-file)
-                        COMPREPLY=( $( compgen -W "$json_file_options" -S = -- "$cur" ) )
-                        ;;
-                syslog)
-                        COMPREPLY=( $( compgen -W "$syslog_options" -S = -- "$cur" ) )
-                        ;;
-                splunk)
-                        COMPREPLY=( $( compgen -W "$splunk_options" -S = -- "$cur" ) )
-                        ;;
-                *)
-                        return
-                        ;;
-        esac
-
-        __docker_nospace
-}
-
 
 _convox_resources_create() {
     resources_create_options_with_args="
@@ -2604,50 +2694,23 @@ _convox_resources_create() {
             __convox_complete_instance_types
             return
             ;;
-        $(__convox_to_extglob "$all_options") )
-            #_convox_resources_create_${RESOURCE_TYPE}
-            return
-            ;;
         $(__convox_to_extglob "$(__convox_resource_types)") )
-            export RESOURCE_TYPE=$prev
-            _convox_resources_create_${RESOURCE_TYPE}
-            return
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            echo "prev is an option with arg"
-            return
-            ;;
-        *)
-            __convox_complete_resource_types
-            #return
-            ;;
-    esac
-
-    # in case user has backspaced over the resource type we were tracking
-    [ "$prev" = "create" ] && unset RESOURCE_TYPE
-
-    case $RESOURCE_TYPE in
-        $(__convox_to_extglob "$(__convox_resource_types)") )
-            _convox_resources_create_${RESOURCE_TYPE}
+            _convox_resources_create_${prev}
             return
         ;;
     esac
 
     case "$cur" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$(__convox_resource_types)") )
-            RESOURCE_TYPE=$prev
-            _convox_resources_create_${prev}
-            return
-            ;;
         *)
             local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
+            # if this is the first non-flag argument, complete resource types
             if [ $cword -eq $counter ]; then
                 __convox_complete_resource_types
                 return
             fi
+            # otherwise, defer to the resource-specific creation command
+            rtype=$(__convox_value_of_first_non_option)
+            _convox_resources_create_${rtype}
             return
             ;;
     esac
@@ -2662,27 +2725,17 @@ _convox_resources_create_fluentd() {
         --url
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
 
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
-        #*)
-            #local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
-            #if [ $cword -eq $counter ]; then
-                #__convox_complete_resource_types
-                #return
-            #fi
-            #return
-            #;;
     esac
 }
 
@@ -2705,25 +2758,16 @@ _convox_resources_create_mysql() {
         --instance-type)
             __convox_complete_instance_types
             ;;
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
 
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
+            return
             ;;
-        #*)
-            #local counter=$( __convox_pos_first_nonflag $( __convox_to_alternatives "$options_with_args" ) )
-            #if [ $cword -eq $counter ]; then
-                #__convox_complete_resource_types
-                #return
-            #fi
-            #;;
     esac
 }
 
@@ -2744,16 +2788,13 @@ _convox_resources_create_postgres() {
     "
     local all_options="$options_with_args $boolean_options"
     case "$prev" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
 
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
     esac
@@ -2761,8 +2802,8 @@ _convox_resources_create_postgres() {
 
 _convox_resources_create_redis() {
     local boolean_options="
-        --automatic-failover-enabled
         $resources_create_boolean_options
+        --automatic-failover-enabled
     "
     local options_with_args="
         $resources_create_options_with_args
@@ -2770,17 +2811,15 @@ _convox_resources_create_redis() {
         --instance-type
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
 
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
     esac
@@ -2788,25 +2827,23 @@ _convox_resources_create_redis() {
 
 _convox_resources_create_s3() {
     local boolean_options="
-        --versioning
         $resources_create_boolean_options
+        --versioning
     "
     local options_with_args="
         $resources_create_options_with_args
         --topic
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
 
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
     esac
@@ -2821,17 +2858,15 @@ _convox_resources_create_sns() {
         --queue
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
 
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
     esac
@@ -2848,24 +2883,16 @@ _convox_resources_create_sqs() {
         --visibility-timeout
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
-            ;;
-        *)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
     esac
 
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
-        $(__convox_to_extglob "$options_with_args") )
-            return
             ;;
     esac
 }
@@ -2880,21 +2907,39 @@ _convox_resources_create_syslog() {
         --url
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
-        -*)
-            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
-            ;;
         $(__convox_to_extglob "$options_with_args") )
             return
             ;;
     esac
 
     case "$cur" in
-        -*)
+        *)
             COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
+    esac
+}
+
+_convox_resources_create_webhook() {
+    local boolean_options="
+        $resources_create_boolean_options
+    "
+    local options_with_args="
+        $resources_create_options_with_args
+        --url
+    "
+    local all_options="$options_with_args $boolean_options"
+
+    case "$prev" in
         $(__convox_to_extglob "$options_with_args") )
             return
+            ;;
+    esac
+
+    case "$cur" in
+        *)
+            COMPREPLY=( $( compgen -W "$all_options" -- "$cur" ) )
             ;;
     esac
 }
@@ -2909,6 +2954,7 @@ _convox_run() {
         --detach
     "
     local all_options="$options_with_args $boolean_options"
+
     case "$prev" in
         --rack)
             __convox_complete_racks_all
@@ -3150,24 +3196,5 @@ __convox_map_key_of_current_option() {
         [ "${words[$glob_pos]}" = "=" ] && ((glob_pos--))  # --option=key=value syntax
 
         [[ ${words[$glob_pos]} == @($glob) ]] && echo "$key"
-}
-
-# Returns the value of the first option matching option_glob.
-# Valid values for option_glob are option names like '--log-level' and
-# globs like '--log-level|-l'
-# Only positions between the command and the current word are considered.
-__convox_value_of_option() {
-        local option_extglob=$(__convox_to_extglob "$1")
-
-        local counter=$((command_pos + 1))
-        while [ $counter -lt $cword ]; do
-                case ${words[$counter]} in
-                        $option_extglob )
-                                echo ${words[$counter + 1]}
-                                break
-                                ;;
-                esac
-                (( counter++ ))
-        done
 }
 
